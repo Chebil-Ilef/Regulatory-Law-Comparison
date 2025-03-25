@@ -2,11 +2,11 @@ import os
 import json
 from llama_index.core import load_index_from_storage, StorageContext
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from src.parser import extract_text_from_pdf, classify_and_store_document
+from src.parser import classify_and_store_document
+from src.ollama_comparison import compare_chunks_with_ollama
 
 EN_INDEX_PATH = "./data/indexes/english"
 DE_INDEX_PATH = "./data/indexes/german"
-
 EMBED_MODEL = HuggingFaceEmbedding(model_name="sentence-transformers/distiluse-base-multilingual-cased-v1")
 
 
@@ -17,11 +17,11 @@ def load_index(language):
     return index
 
 
-def compare_new_document(pdf_path):
+def compare_new_document(pdf_path, report_path="./reports/comparison_report.txt"):
     print(f"\nLoading and processing: {pdf_path}")
 
     # Detect language to find the right JSON path
-    lang= classify_and_store_document(pdf_path)['language']
+    lang = classify_and_store_document(pdf_path)['language']
     lang_folder = "german" if lang == "de" else "english"
     base_filename = os.path.splitext(os.path.basename(pdf_path))[0] + ".json"
     json_path = os.path.join("./data/processed_docs", lang_folder, base_filename)
@@ -40,24 +40,27 @@ def compare_new_document(pdf_path):
         return
 
     # Load the correct vector index
-
     index = load_index(lang)
-    retriever = index.as_retriever()
-    top_k = 1000  #top 1000 similar chunks set fixed now for testing
+    retriever = index.as_retriever(similarity_top_k=5) #top 5 similar chunks now fixed for testand simplicity
 
     print(f"Language detected: {'German' if lang == 'de' else 'English'}")
-    print(f"Searching for top-{top_k} similar chunks from existing docs...\n")
+    print("Running semantic comparisons...\n")
 
-    for i, chunk in enumerate(chunks):
-        new_text = chunk["text"]
-        results = retriever.retrieve(new_text)
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
+    with open(report_path, "w", encoding="utf-8") as report_file:
+        for i, chunk in enumerate(chunks):
+            new_text = chunk["text"]
+            results = retriever.retrieve(new_text)
 
-        print(f"\n--- Chunk {i+1} ---")
-        print(f"New: {new_text[:300]}...")
+            report_file.write(f"\n--- Chunk {i+1} ---\n")
+            report_file.write(f"New: {new_text[:300]}...\n")
 
-        if results:
-            print("Most similar in existing docs:")
-            for j, result in enumerate(results):
-                print(f"  Match #{j+1}: {result.node.get_content()[:300]}...")
-        else:
-            print("No similar content found.")
+            if results:
+                for j, result in enumerate(results):
+                    old_text = result.node.get_content()
+                    response = compare_chunks_with_ollama(new_text, old_text)
+                    report_file.write(f"\nMatch #{j+1} Response:\n{response}\n")
+            else:
+                report_file.write("No similar content found.\n")
+
+    print(f"Comparison report saved to: {report_path}")
