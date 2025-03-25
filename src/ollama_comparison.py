@@ -18,6 +18,11 @@ def compare_chunks_with_ollama(new_chunk, old_chunk, model="deepseek-r1:8b"):
     - Summarize the key differences
     - Classify the change as one of: [No Change, Minor Update, Major Update, Removed, Added]
     - Return the result as a JSON with keys: "summary", "change_type"
+
+    Output Example:
+    {
+        "summary": "The new clause introduces a new requirement for data retention.",
+        "change_type": "Minor Update"
     """
 
     response = requests.post("http://localhost:11434/api/generate", json={
