@@ -19,14 +19,23 @@ def extract_text_from_pdf(pdf_path):
 
 
 def chunk_text(text):
-    # Basic chunking: split by headings like "Article", "Section", etc.
-    chunks = re.split(r"(?i)(?=\b(Article|Section|§)\s+\d+)", text)
+    # Try structured legal heading-based chunking first because this preserves more context than chunking by paragraphs
+    chunks = re.split(r"(?i)(?=\\b(Article|Section|§)\\s+\\d+)", text)
     structured = []
     for i in range(0, len(chunks) - 1, 2):
         title = chunks[i].strip()
         body = chunks[i + 1].strip()
         if title or body:
             structured.append({"title": title, "text": body})
+
+    # If no chunks found, fallback to paragraph-based chunking
+    if not structured:
+        paragraphs = text.split("\\n\\n")
+        for para in paragraphs:
+            para = para.strip()
+            if para:
+                structured.append({"title": "", "text": para})
+
     return structured
 
 
